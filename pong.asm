@@ -8,6 +8,9 @@ VK_J equ 0x4A
 VK_K equ 0x4B
 WM_KEYDOWN equ 0x100
 WM_KEYUP equ 0x101
+PLAYER_SIZE_X EQU 30
+PLAYER_SIZE_Y EQU 100
+BALL_SIZE EQU 15
 
 
 segment .data
@@ -18,6 +21,12 @@ segment .data
     hbr_background dw 0x5
     dw_style dd 0xcf0000
     handle dq 1
+    player1_x dd 0
+    player1_y dd HEIGHT/2 - PLAYER_SIZE_Y/2
+    player2_x dd WIDTH - PLAYER_SIZE_X
+    player2_y dd HEIGHT/2 - PLAYER_SIZE_Y/2
+    ball_x dd WIDTH/2 - BALL_SIZE/2
+    ball_y dd HEIGHT/2 - BALL_SIZE/2
 
 segment .bss
     hInstance resb 8
@@ -57,16 +66,12 @@ main:
     sub     rsp, 32
 
     call    create_window
-    call  clear_buffer
-
-    mov ecx, 250
-    mov edx, 150
-    mov r8d, 100
-    mov r9d, 300
-    call draw_rect
 
 .MAIN_LOOP:
+    call  clear_buffer
+    call  draw_objects
     call redraw
+
     lea rcx, [msg]
     mov rdx, qword[handle]
     mov r8, 0
@@ -76,6 +81,7 @@ main:
     call TranslateMessage
     lea rcx, [msg]
     call DispatchMessageA
+
     call read_input
     mov rcx, qword[handle]
     call IsWindow
@@ -84,6 +90,37 @@ main:
     xor     rax, rax
     call    ExitProcess
 
+draw_objects:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 32
+
+    mov ecx, dword[player1_x]
+    mov edx, dword[player1_y]
+    mov r8d, PLAYER_SIZE_X
+    mov r9d, PLAYER_SIZE_Y
+    call draw_rect
+    
+    mov ecx, dword[player2_x]
+    mov edx, dword[player2_y]
+    mov r8d, PLAYER_SIZE_X
+    mov r9d, PLAYER_SIZE_Y
+    call draw_rect
+
+    mov ecx, dword[ball_x]
+    mov edx, dword[ball_y]
+    mov r8d, BALL_SIZE
+    mov r9d, BALL_SIZE
+    call draw_rect
+
+    mov ecx, WIDTH/2
+    mov edx, 0
+    mov r8d, 5
+    mov r9d, HEIGHT
+    call draw_rect
+
+    leave 
+    ret
 
 draw_rect:
     push rbp
