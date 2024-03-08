@@ -4,6 +4,10 @@ default rel
 WIDTH equ 800
 HEIGHT equ 600
 WM_PAINT equ 0x000F
+VK_J equ 0x4A
+VK_K equ 0x4B
+WM_KEYDOWN equ 0x100
+WM_KEYUP equ 0x101
 
 
 segment .data
@@ -23,6 +27,8 @@ segment .bss
     paint_struct resb 72
     bitmap_info resb 44
     msg resb 48
+    input_up resb 1
+    input_down resb 1
 
 segment .text
     global main
@@ -43,7 +49,6 @@ segment .text
     extern IsWindow
     extern GetMessageA
     extern InvalidateRect
-    extern UpdateWindow
     
 
 main:
@@ -53,6 +58,12 @@ main:
 
     call    create_window
     call  clear_buffer
+
+    mov ecx, 250
+    mov edx, 150
+    mov r8d, 100
+    mov r9d, 300
+    call draw_rect
 
 .MAIN_LOOP:
     call redraw
@@ -65,12 +76,93 @@ main:
     call TranslateMessage
     lea rcx, [msg]
     call DispatchMessageA
+    call read_input
     mov rcx, qword[handle]
     call IsWindow
     cmp rax, 0
     jne .MAIN_LOOP
     xor     rax, rax
     call    ExitProcess
+
+
+draw_rect:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 32  + 7*4
+    %define x rsp+32
+    %define y rsp+36
+    %define w rsp+40
+    %define h rsp+44
+    %define i rsp+48
+    %define j rsp+52
+
+    mov dword[x], ecx
+    mov dword[y], edx
+    mov dword[w], r8d
+    mov dword[h], r9d
+
+    mov eax, dword[y]
+    mov dword[i], eax
+.draw_outer:
+    mov eax, dword[x]
+    mov dword[j], eax
+.draw_inner:
+    xor rax, rax
+    mov eax, dword[i]
+    imul rax, WIDTH 
+    add eax, dword[j]
+    imul rax, 4 ; go from index to byte offset
+
+    lea r10, [buffer]
+    add r10, rax
+    mov dword[r10], 0xFFFFFF
+
+    add dword[j], 1
+
+    mov eax, dword[j]
+    sub eax, dword[x]
+    cmp eax, dword[w]
+    jl .draw_inner
+    add dword[i], 1
+    mov eax, dword[i]
+    sub eax, dword[y]
+    cmp eax, dword[h]
+    jl .draw_outer
+    leave
+    ret
+
+read_input:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 32
+    cmp dword[msg+8], WM_KEYDOWN
+    jne .NOT_KEYDOWN
+    cmp qword[msg+16], VK_J
+    jne .NOT_J_DOWN
+    mov byte[input_down], 1
+    .NOT_J_DOWN:
+    cmp qword[msg+16], VK_K
+    jne .NOT_K_DOWN
+    mov byte[input_up], 1
+    .NOT_K_DOWN:
+    .NOT_KEYDOWN:
+
+    cmp dword[msg+8], WM_KEYUP
+    jne .NOT_KEYUP
+    cmp qword[msg+16], VK_J
+    jne .NOT_J_UP
+    mov byte[input_down], 0
+    .NOT_J_UP:
+    cmp qword[msg+16], VK_K
+    jne .NOT_K_UP
+    mov byte[input_up], 0
+    .NOT_K_UP:
+    .NOT_KEYUP:
+
+    add rsp, 32
+    leave
+    ret
+
 
 create_window:
     push    rbp
@@ -158,7 +250,7 @@ clear_buffer:
     mov r10, 0
     lea r11, [buffer]
 .LOOP:
-    mov dword[r11], 0xFF0000
+    mov dword[r11], 0
     add r10, 1
     add r11, 4
     cmp r10, WIDTH*HEIGHT
