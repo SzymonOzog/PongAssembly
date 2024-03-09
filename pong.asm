@@ -27,6 +27,7 @@ segment .data
     player2_y dd HEIGHT/2 - PLAYER_SIZE_Y/2
     ball_x dd WIDTH/2 - BALL_SIZE/2
     ball_y dd HEIGHT/2 - BALL_SIZE/2
+    delta_time dd 0
 
 segment .bss
     hInstance resb 8
@@ -38,6 +39,7 @@ segment .bss
     msg resb 48
     input_up resb 1
     input_down resb 1
+    time resb 8
 
 segment .text
     global main
@@ -58,6 +60,7 @@ segment .text
     extern IsWindow
     extern GetMessageA
     extern InvalidateRect
+    extern GetSystemTimePreciseAsFileTime
     
 
 main:
@@ -68,6 +71,12 @@ main:
     call    create_window
 
 .MAIN_LOOP:
+    lea rcx, [time]
+    call GetSystemTimePreciseAsFileTime
+    mov rax, qword[time]
+    mov qword[rsp+32], rax
+
+    
     call  clear_buffer
     call  draw_objects
     call redraw
@@ -85,6 +94,13 @@ main:
     call read_input
     mov rcx, qword[handle]
     call IsWindow
+
+    lea rcx, [time]
+    call GetSystemTimePreciseAsFileTime
+    mov rax, qword[time]
+    sub rax, qword[rsp+32]
+    mov qword[delta_time], rax
+    
     cmp rax, 0
     jne .MAIN_LOOP
     xor     rax, rax
