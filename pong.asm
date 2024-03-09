@@ -15,6 +15,7 @@ BALL_SIZE EQU 15
 
 segment .data
     format db "value %d", 0xd, 0xa, 0
+    float_fm db "float %f", 0xd, 0xa, 0
     error db "error %d", 0xd, 0xa, 0
     window_name db "pong window", 0
     style dw 0x3
@@ -28,6 +29,8 @@ segment .data
     ball_x dd WIDTH/2 - BALL_SIZE/2
     ball_y dd HEIGHT/2 - BALL_SIZE/2
     delta_time dd 0
+    ball_speed_x dd 0.0001
+    ball_speed_y dd 0.0001
 
 segment .bss
     hInstance resb 8
@@ -66,7 +69,18 @@ segment .text
 main:
     push    rbp
     mov     rbp, rsp
-    sub     rsp, 32
+    sub     rsp, 32 + 16
+
+    pxor xmm0,xmm0
+    cvtsi2ss xmm0, dword[player1_y]
+    movss [player1_y], xmm0
+    cvtsi2ss xmm0, dword[player2_y]
+    movss [player2_y], xmm0
+    cvtsi2ss xmm0, dword[ball_x]
+    movss [ball_x], xmm0
+    cvtsi2ss xmm0, dword[ball_y]
+    movss [ball_y], xmm0
+
 
     call    create_window
 
@@ -112,19 +126,19 @@ draw_objects:
     sub rsp, 32
 
     mov ecx, dword[player1_x]
-    mov edx, dword[player1_y]
+    cvtss2si edx, dword[player1_y]
     mov r8d, PLAYER_SIZE_X
     mov r9d, PLAYER_SIZE_Y
     call draw_rect
     
     mov ecx, dword[player2_x]
-    mov edx, dword[player2_y]
+    cvtss2si edx, dword[player2_y]
     mov r8d, PLAYER_SIZE_X
     mov r9d, PLAYER_SIZE_Y
     call draw_rect
 
-    mov ecx, dword[ball_x]
-    mov edx, dword[ball_y]
+    cvtss2si ecx, dword[ball_x]
+    cvtss2si edx, dword[ball_y]
     mov r8d, BALL_SIZE
     mov r9d, BALL_SIZE
     call draw_rect
