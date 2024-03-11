@@ -13,6 +13,12 @@ WM_KEYUP equ 0x101
 PLAYER_SIZE_X EQU 30
 PLAYER_SIZE_Y EQU 100
 BALL_SIZE EQU 15
+CS_HREDRAW EQU 0x2
+CS_VREDRAW EQU 0x1
+COLOR_WINDOW EQU 0x5
+WS_OVERLAPPEDWINDOW EQU 0xCF0000
+WS_MINIMIZEBOX EQU 0x20000
+WS_SYSMENUL EQU 0x80000
 
 
 segment .data
@@ -20,9 +26,6 @@ segment .data
     float_fm db "float %f", 0xd, 0xa, 0
     error db "error %d", 0xd, 0xa, 0
     window_name db "pong window", 0
-    style dw 0x3
-    hbr_background dw 0x5
-    dw_style dd 0xcf0000
     handle dq 1
     player1_x dd 0
     player1_y dd HEIGHT/2 - PLAYER_SIZE_Y/2
@@ -34,6 +37,7 @@ segment .data
     ball_speed_x dd 0.00003
     ball_speed_y dd 0.00003
     player_speed dd 0.00005
+    hit_move_scale dd 10000.0
     sign_invert dd 0x80000000
 
 segment .bss
@@ -265,8 +269,29 @@ update_positions:
     xorps xmm0, xmm1
     movss [ball_speed_x], xmm0
 
+    movss xmm1, dword[ball_x]
+    mulss xmm0, dword[hit_move_scale]
+    addss xmm1, xmm0
+    movss [ball_x], xmm1
+
 .SKIP_CHANGE_X:
     add rsp, 8*4
+
+    cvtss2si eax,dword[ball_x]
+    cmp eax, 0
+    jge .NOT_SCORED_1
+    mov eax, WIDTH/2 - BALL_SIZE/2
+    cvtsi2ss xmm0, eax
+    movss dword[ball_x], xmm0
+
+.NOT_SCORED_1:
+    cmp eax, WIDTH - BALL_SIZE
+    jle .NOT_SCORED_2
+    mov eax, WIDTH/2 - BALL_SIZE/2
+    cvtsi2ss xmm0, eax
+    movss dword[ball_x], xmm0
+
+.NOT_SCORED_2:
     add rsp, 32
     leave 
     ret
@@ -451,7 +476,7 @@ create_window:
     
     ; wndclassA
     mov dword[win_class], 80
-    mov dword[win_class+4], 0x3
+    mov dword[win_class+4], CS_HREDRAW | CS_VREDRAW
     lea rax, [window_proc]
     mov qword[win_class+8], rax 
     mov dword[win_class+16], 0
@@ -459,7 +484,7 @@ create_window:
     mov qword[win_class+24], 0
     mov qword[win_class+32], 0
     mov qword[win_class+40], 0
-    mov qword[win_class+48], 0x5
+    mov qword[win_class+48], COLOR_WINDOW 
     lea rax, [window_name]
     mov qword[win_class+56], rax
     lea rax, [window_name]
@@ -472,12 +497,12 @@ create_window:
     mov ecx, 0
     mov rdx, qword[win_class+56]
     mov r8, qword[win_class+64]
-    mov r9, qword[dw_style]
+    mov r9, (WS_MINIMIZEBOX | WS_SYSMENUL)
 
     mov qword[rsp+4*8], 200
     mov qword[rsp+5*8], 200
-    mov qword[rsp+6*8], 800
-    mov qword[rsp+7*8], 600
+    mov qword[rsp+6*8], WIDTH+4 
+    mov qword[rsp+7*8], HEIGHT+23
 
     mov qword[rsp+8*8], 0
     mov qword[rsp+9*8], 0
@@ -615,4 +640,3 @@ draw_buffer:
 
     leave 
     ret
-
