@@ -6,6 +6,8 @@ HEIGHT equ 600
 WM_PAINT equ 0x000F
 VK_J equ 0x4A
 VK_K equ 0x4B
+VK_S equ 0x53
+VK_W equ 0x57
 WM_KEYDOWN equ 0x100
 WM_KEYUP equ 0x101
 PLAYER_SIZE_X EQU 30
@@ -29,8 +31,10 @@ segment .data
     ball_x dd WIDTH/2 - BALL_SIZE/2
     ball_y dd HEIGHT/2 - BALL_SIZE/2
     delta_time dd 0
-    ball_speed_x dd 0.0001
-    ball_speed_y dd 0.0001
+    ball_speed_x dd 0.00003
+    ball_speed_y dd 0.00003
+    player_speed dd 0.00005
+    sign_invert dd 0x80000000
 
 segment .bss
     hInstance resb 8
@@ -40,8 +44,10 @@ segment .bss
     paint_struct resb 72
     bitmap_info resb 44
     msg resb 48
-    input_up resb 1
-    input_down resb 1
+    input_up_1 resb 1
+    input_down_1 resb 1
+    input_up_2 resb 1
+    input_down_2 resb 1
     time resb 8
 
 segment .text
@@ -92,6 +98,7 @@ main:
 
     
     call  clear_buffer
+    call update_positions
     call  draw_objects
     call redraw
 
@@ -113,12 +120,201 @@ main:
     call GetSystemTimePreciseAsFileTime
     mov rax, qword[time]
     sub rax, qword[rsp+32]
-    mov qword[delta_time], rax
+    mov dword[delta_time], eax
     
     cmp rax, 0
     jne .MAIN_LOOP
     xor     rax, rax
     call    ExitProcess
+
+update_positions:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 32
+
+    cmp byte[input_up_1], 1
+    jne .NOT_PLAYER1_UP
+    movss xmm0, dword[player_speed]
+    cvtsi2ss xmm1, dword[delta_time]
+    mulss xmm0, xmm1
+    movss xmm1, dword[player1_y]
+    addss xmm0, xmm1
+    cvtss2si rax, xmm0
+    cmp rax, HEIGHT - PLAYER_SIZE_Y
+    jge .NOT_PLAYER1_UP
+    movss [player1_y], xmm0
+.NOT_PLAYER1_UP:
+    cmp byte[input_down_1], 1
+    jne .NOT_PLAYER1_DOWN
+    movss xmm0, dword[player_speed]
+    cvtsi2ss xmm1, dword[delta_time]
+    mulss xmm0, xmm1
+    movss xmm1, dword[player1_y]
+    subss xmm1, xmm0
+    cvtss2si rax, xmm1
+    cmp rax, 0
+    jle .NOT_PLAYER1_DOWN
+    movss [player1_y], xmm1
+.NOT_PLAYER1_DOWN:
+
+    cmp byte[input_up_2], 1
+    jne .NOT_PLAYER2_UP
+    movss xmm0, dword[player_speed]
+    cvtsi2ss xmm1, dword[delta_time]
+    mulss xmm0, xmm1
+    movss xmm1, dword[player2_y]
+    addss xmm0, xmm1
+    cvtss2si rax, xmm0
+    cmp rax, HEIGHT - PLAYER_SIZE_Y
+    jge .NOT_PLAYER2_UP
+    movss [player2_y], xmm0
+.NOT_PLAYER2_UP:
+    cmp byte[input_down_2], 1
+    jne .NOT_PLAYER2_DOWN
+    movss xmm0, dword[player_speed]
+    cvtsi2ss xmm1, dword[delta_time]
+    mulss xmm0, xmm1
+    movss xmm1, dword[player2_y]
+    subss xmm1, xmm0
+    cvtss2si rax, xmm1
+    cmp rax, 0
+    jle .NOT_PLAYER2_DOWN
+    movss [player2_y], xmm1
+.NOT_PLAYER2_DOWN:
+
+    movss xmm0, dword[ball_speed_x]
+    cvtsi2ss xmm1, dword[delta_time]
+    mulss xmm0, xmm1
+    movss xmm1, dword[ball_x]
+    addss xmm0, xmm1
+    movss [ball_x], xmm0
+
+    movss xmm0, dword[ball_speed_y]
+    cvtsi2ss xmm1, dword[delta_time]
+    mulss xmm0, xmm1
+    movss xmm1, dword[ball_y]
+    addss xmm0, xmm1
+
+    cvtss2si rax, xmm0
+    cmp rax, HEIGHT - BALL_SIZE
+    jge .CHANGE_VEL
+
+    cvtss2si rax, xmm0
+    cmp rax, 0
+    JLE .CHANGE_VEL
+
+    movss [ball_y], xmm0
+    jmp .SKIP_CHANGE_Y
+
+.CHANGE_VEL:
+    movss xmm0, dword[ball_speed_y]
+    movss xmm1, dword[sign_invert]
+    xorps xmm0, xmm1
+    movss [ball_speed_y], xmm0
+
+.SKIP_CHANGE_Y:
+
+    sub rsp, 8*4
+    
+    %define o1_x rsp+32
+    %define o1_y rsp+36
+    %define o1_h rsp+40
+    %define o1_w rsp+44
+    %define o2_x rsp+48
+    %define o2_y rsp+52
+    %define o2_h rsp+56
+    %define o2_w rsp+60
+
+    mov eax, dword[player1_x]
+    mov dword[o1_x], eax
+    cvtss2si eax, dword[player1_y]
+    mov dword[o1_y], eax
+    mov dword[o1_h], PLAYER_SIZE_Y
+    mov dword[o1_w], PLAYER_SIZE_X
+
+    cvtss2si eax, dword[ball_x]
+    mov dword[o2_x], eax
+    cvtss2si eax, dword[ball_y]
+    mov dword[o2_y], eax
+    mov dword[o2_h], BALL_SIZE
+    mov dword[o2_w], BALL_SIZE
+    call rectangle_collision
+    cmp rax, 1
+    je .CHANGE_VEL_X
+
+    mov eax,dword[player2_x]
+    mov dword[o1_x], eax
+    cvtss2si eax,dword[player2_y]
+    mov dword[o1_y], eax
+    mov dword[o1_h], PLAYER_SIZE_Y
+    mov dword[o1_w], PLAYER_SIZE_X
+
+    cvtss2si eax,dword[ball_x]
+    mov dword[o2_x], eax
+    cvtss2si eax,[ball_y]
+    mov dword[o2_y], eax
+    mov dword[o2_h], BALL_SIZE
+    mov dword[o2_w], BALL_SIZE
+    call rectangle_collision
+    cmp rax, 1
+    jne .SKIP_CHANGE_X
+
+.CHANGE_VEL_X:
+    movss xmm0, dword[ball_speed_x]
+    movss xmm1, dword[sign_invert]
+    xorps xmm0, xmm1
+    movss [ball_speed_x], xmm0
+
+.SKIP_CHANGE_X:
+    add rsp, 8*4
+    add rsp, 32
+    leave 
+    ret
+
+rectangle_collision:
+    push rbp
+    mov rbp, rsp
+
+    %define o1_x rsp+32+16
+    %define o1_y rsp+36+16
+    %define o1_h rsp+40+16 
+    %define o1_w rsp+44+16
+    %define o2_x rsp+48+16
+    %define o2_y rsp+52+16
+    %define o2_h rsp+56+16
+    %define o2_w rsp+60+16
+
+    mov ecx, dword[o1_x]
+    mov edx, dword[o2_x]
+    add edx, dword[o2_w]
+    cmp ecx, edx
+    jge .ARE_NOT_COLLIDING
+
+    mov ecx, dword[o1_y]
+    mov edx, dword[o2_y]
+    add edx, dword[o2_h]
+    cmp ecx, edx
+    jge .ARE_NOT_COLLIDING
+
+    mov ecx, dword[o1_y]
+    add ecx, dword[o1_h]
+    mov edx, dword[o2_y]
+    cmp ecx, edx
+    jle .ARE_NOT_COLLIDING
+
+    mov ecx, dword[o1_x]
+    add ecx, dword[o1_w]
+    mov edx, dword[o2_x]
+    cmp ecx, edx
+    jle .ARE_NOT_COLLIDING
+
+    mov rax, 1
+    leave
+    ret
+.ARE_NOT_COLLIDING:
+    mov rax, 0
+    leave
+    ret
 
 draw_objects:
     push rbp
@@ -202,28 +398,45 @@ read_input:
     push rbp
     mov rbp, rsp
     sub rsp, 32
+
     cmp dword[msg+8], WM_KEYDOWN
     jne .NOT_KEYDOWN
     cmp qword[msg+16], VK_J
     jne .NOT_J_DOWN
-    mov byte[input_down], 1
+    mov byte[input_down_2], 1
     .NOT_J_DOWN:
     cmp qword[msg+16], VK_K
     jne .NOT_K_DOWN
-    mov byte[input_up], 1
+    mov byte[input_up_2], 1
     .NOT_K_DOWN:
+    cmp qword[msg+16], VK_W
+    jne .NOT_W_DOWN
+    mov byte[input_up_1], 1
+    .NOT_W_DOWN:
+    cmp qword[msg+16], VK_S
+    jne .NOT_S_DOWN
+    mov byte[input_down_1], 1
+    .NOT_S_DOWN:
     .NOT_KEYDOWN:
 
     cmp dword[msg+8], WM_KEYUP
     jne .NOT_KEYUP
     cmp qword[msg+16], VK_J
     jne .NOT_J_UP
-    mov byte[input_down], 0
+    mov byte[input_down_2], 0
     .NOT_J_UP:
     cmp qword[msg+16], VK_K
     jne .NOT_K_UP
-    mov byte[input_up], 0
+    mov byte[input_up_2], 0
     .NOT_K_UP:
+    cmp qword[msg+16], VK_W
+    jne .NOT_W_UP
+    mov byte[input_up_1], 0
+    .NOT_W_UP:
+    cmp qword[msg+16], VK_S
+    jne .NOT_S_UP
+    mov byte[input_down_1], 0
+    .NOT_S_UP:
     .NOT_KEYUP:
 
     add rsp, 32
